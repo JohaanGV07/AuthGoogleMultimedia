@@ -1,6 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart'; 
+import 'package:emoji_picker_flutter/emoji_picker_flutter.dart'; 
 import '../services/auth_service.dart';
+
+// 1. CORRECCIÓN DE IMPORT: Apuntamos a la carpeta correcta
+// Si te da error, asegúrate de que 'imgbb_service.dart' está en 'lib/core/services/'
+// Si lo tienes en 'lib/services/', cambia 'core/services' por 'services'
+import '../services/imgbb_service.dart'; 
 
 class ChatScreen extends StatefulWidget {
   final String receiverId;
@@ -15,6 +22,25 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final currentUser = AuthService().currentUser;
+  final FocusNode _focusNode = FocusNode();
+  
+  // Instancia del servicio Imgbb
+  final ImgbbService _imgbbService = ImgbbService(); 
+
+  bool _isShowEmoji = false;
+  bool _isUploading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() {
+      if (_focusNode.hasFocus) {
+        setState(() {
+          _isShowEmoji = false;
+        });
+      }
+    });
+  }
 
   String get chatId {
     List<String> ids = [currentUser!.uid, widget.receiverId];
@@ -32,6 +58,7 @@ class _ChatScreenState extends State<ChatScreen> {
         .add({
       'senderId': currentUser!.uid,
       'text': _messageController.text.trim(),
+      'type': 'text',
       'timestamp': FieldValue.serverTimestamp(),
       'senderName': currentUser!.displayName,
     });
@@ -39,10 +66,47 @@ class _ChatScreenState extends State<ChatScreen> {
     _messageController.clear();
   }
 
+  // --- FUNCIÓN PARA SUBIR IMAGEN ---
+  Future<void> _sendImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+
+    if (image != null) {
+      setState(() => _isUploading = true);
+
+      try {
+        final imageBytes = await image.readAsBytes();
+        String? imageUrl = await _imgbbService.uploadImage(imageBytes);
+
+        if (imageUrl != null) {
+          await FirebaseFirestore.instance
+              .collection('chats')
+              .doc(chatId)
+              .collection('messages')
+              .add({
+            'senderId': currentUser!.uid,
+            'imageUrl': imageUrl,
+            'text': '📷 Imagen',
+            'type': 'image',
+            'timestamp': FieldValue.serverTimestamp(),
+            'senderName': currentUser!.displayName,
+          });
+        } else {
+           if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error al subir la imagen")));
+        }
+
+      } catch (e) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+      } finally {
+        if (mounted) setState(() => _isUploading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFE5DDD5), // Fondo beige clásico
+      backgroundColor: const Color(0xFFE5DDD5), 
       appBar: AppBar(
         title: Row(
           children: [
@@ -60,13 +124,8 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ],
         ),
-        backgroundColor: const Color(0xFF075E54), // Verde oscuro
+        backgroundColor: const Color(0xFF075E54),
         foregroundColor: Colors.white,
-        actions: [
-          IconButton(icon: const Icon(Icons.videocam), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.call), onPressed: () {}),
-          IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
-        ],
       ),
       body: Column(
         children: [
@@ -88,53 +147,48 @@ class _ChatScreenState extends State<ChatScreen> {
                   itemBuilder: (context, index) {
                     final msg = snapshot.data!.docs[index];
                     final isMe = msg['senderId'] == currentUser!.uid;
+                    final type = msg['type'] ?? 'text';
 
                     return Align(
                       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
                       child: Container(
                         margin: const EdgeInsets.symmetric(vertical: 4),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        padding: const EdgeInsets.all(5),
                         constraints: BoxConstraints(
                           maxWidth: MediaQuery.of(context).size.width * 0.75,
                         ),
                         decoration: BoxDecoration(
-                          color: isMe ? const Color(0xFFDCF8C6) : Colors.white, // Verde claro para mí, blanco para otro
-                          borderRadius: BorderRadius.only(
-                            topLeft: const Radius.circular(12),
-                            topRight: const Radius.circular(12),
-                            bottomLeft: isMe ? const Radius.circular(12) : Radius.zero,
-                            bottomRight: isMe ? Radius.zero : const Radius.circular(12),
-                          ),
+                          color: isMe ? const Color(0xFFDCF8C6) : Colors.white,
+                          borderRadius: BorderRadius.circular(12),
                           boxShadow: [
-                            BoxShadow(
-                              color: Colors.grey.withOpacity(0.5),
-                              spreadRadius: 1,
-                              blurRadius: 2,
-                              offset: const Offset(0, 1),
-                            ),
+                            BoxShadow(color: Colors.grey.withOpacity(0.5), blurRadius: 2, offset: const Offset(0, 1))
                           ],
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              msg['text'],
-                              style: const TextStyle(fontSize: 16, color: Colors.black87),
-                            ),
-                            const SizedBox(height: 4),
-                            // Hora simulada pequeña
-                            Align(
-                              alignment: Alignment.bottomRight,
-                              child: Text(
-                                "12:00", // Aquí podrías formatear el timestamp real
-                                style: TextStyle(
-                                  fontSize: 10, 
-                                  color: isMe ? Colors.grey[600] : Colors.grey[500],
+                        child: type == 'image'
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.network(
+                                  msg['imageUrl'] ?? '',
+                                  loadingBuilder: (ctx, child, progress) {
+                                    if (progress == null) return child;
+                                    return Container(
+                                        height: 150, 
+                                        width: 150, 
+                                        alignment: Alignment.center,
+                                        child: const CircularProgressIndicator()
+                                    );
+                                  },
+                                  errorBuilder: (context, error, stackTrace) => 
+                                    const Icon(Icons.broken_image, size: 50, color: Colors.grey),
+                                ),
+                              )
+                            : Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                child: Text(
+                                  msg['text'] ?? '',
+                                  style: const TextStyle(fontSize: 16, color: Colors.black87),
                                 ),
                               ),
-                            )
-                          ],
-                        ),
                       ),
                     );
                   },
@@ -143,7 +197,8 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           ),
           
-          // --- BARRA DE ESCRITURA ---
+          if (_isUploading) const LinearProgressIndicator(),
+
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: Row(
@@ -154,23 +209,33 @@ class _ChatScreenState extends State<ChatScreen> {
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(30),
                       boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.5),
-                          spreadRadius: 1,
-                          blurRadius: 2,
-                          offset: const Offset(0, 1),
-                        ),
+                        BoxShadow(color: Colors.grey.withOpacity(0.5), blurRadius: 2, offset: const Offset(0, 1)),
                       ],
                     ),
                     child: Row(
                       children: [
+                        // --- BOTÓN EMOJIS (NUEVO) ---
                         IconButton(
-                          icon: const Icon(Icons.emoji_emotions_outlined, color: Colors.grey),
-                          onPressed: () {},
+                          icon: Icon(
+                            _isShowEmoji ? Icons.keyboard : Icons.emoji_emotions_outlined,
+                            color: Colors.grey,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _isShowEmoji = !_isShowEmoji;
+                              if (_isShowEmoji) {
+                                _focusNode.unfocus(); // Ocultar teclado
+                              } else {
+                                _focusNode.requestFocus(); // Mostrar teclado
+                              }
+                            });
+                          },
                         ),
+                        
                         Expanded(
                           child: TextField(
                             controller: _messageController,
+                            focusNode: _focusNode,
                             decoration: const InputDecoration(
                               hintText: "Mensaje",
                               border: InputBorder.none,
@@ -178,13 +243,11 @@ class _ChatScreenState extends State<ChatScreen> {
                             ),
                           ),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.attach_file, color: Colors.grey),
-                          onPressed: () {},
-                        ),
+                        
+                        // Botón Cámara (Envía imagen)
                         IconButton(
                           icon: const Icon(Icons.camera_alt, color: Colors.grey),
-                          onPressed: () {},
+                          onPressed: _sendImage,
                         ),
                       ],
                     ),
@@ -193,7 +256,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 const SizedBox(width: 8),
                 CircleAvatar(
                   radius: 24,
-                  backgroundColor: const Color(0xFF00897B), // Verde botón
+                  backgroundColor: const Color(0xFF00897B),
                   child: IconButton(
                     icon: const Icon(Icons.send, color: Colors.white, size: 20),
                     onPressed: _sendMessage,
@@ -202,6 +265,29 @@ class _ChatScreenState extends State<ChatScreen> {
               ],
             ),
           ),
+
+          // --- SELECTOR DE EMOJIS (NUEVO) ---
+          if (_isShowEmoji)
+            SizedBox(
+              height: 250,
+              child: EmojiPicker(
+                onEmojiSelected: (category, emoji) {
+                  _messageController.text = _messageController.text + emoji.emoji;
+                },
+                config: Config(
+                  // Configuración estándar compatible
+                  emojiViewConfig: EmojiViewConfig(
+                    columns: 7,
+                    emojiSizeMax: 32,
+                  ),
+                  categoryViewConfig: const CategoryViewConfig(
+                    initCategory: Category.RECENT,
+                    indicatorColor: Color(0xFF075E54),
+                    iconColorSelected: Color(0xFF075E54),
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

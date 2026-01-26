@@ -16,6 +16,10 @@ dependencies:
   # Plugin para el flujo de Google
   google_sign_in: ^6.2.1
   cloud_firestore: ^5.6.12
+  emoji_picker_flutter: ^4.4.0
+  image_picker: ^1.2.1
+  firebase_storage: ^12.4.10
+  http: ^1.6.0
 
 dev_dependencies:
   flutter_test:
