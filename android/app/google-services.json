@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "953854823291",
+    "project_id": "loginauth-41ec3",
+    "storage_bucket": "loginauth-41ec3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:953854823291:android:01b81c424c02b12da24bde",
+        "android_client_info": {
+          "package_name": "com.johan.project"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCD1UPgkIdshjTiihHCV79d1wGYdmYjL2c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

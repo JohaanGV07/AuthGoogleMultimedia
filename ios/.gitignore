@@ -1,0 +1,80 @@
+# --- FLUTTER Y DART ---
+/build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+
+# --- ANDROID ---
+/android/local.properties
+/android/.gradle/
+/android/app/build/
+/android/captures/
+/android/gradlew
+/android/gradlew.bat
+/android/key.properties
+**/*.keystore
+**/*.jks
+
+# --- IOS / XCODE (Tu fragmento incluido) ---
+.DS_Store
+.atom/
+.buildlog/
+.history
+.svn/
+migrate_working_dir/
+nbproject/
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+Thumbs.db
+
+# Archivos específicos de iOS generados
+/ios/Flutter/App.framework
+/ios/Flutter/Flutter.framework
+/ios/Flutter/Flutter.podspec
+/ios/Flutter/Generated.xcconfig
+/ios/Flutter/app.flx
+/ios/Flutter/app.zip
+/ios/Flutter/flutter_assets/
+/ios/Flutter/flutter_export_environment.sh
+/ios/ServiceDefinitions.json
+/ios/Runner/GeneratedPluginRegistrant.*
+
+# Reglas estándar de Xcode
+**/dgph
+*.mode1v3
+*.mode2v3
+*.moved-aside
+*.pbxuser
+*.perspectivev3
+**/*sync/
+.sconsign.dblite
+.tags*
+**/.vagrant/
+**/DerivedData/
+Icon?
+**/Pods/
+**/.symlinks/
+profile
+xcuserdata
+**/.generated/
+
+# Excepciones
+!default.mode1v3
+!default.mode2v3
+!default.pbxuser
+!default.perspectivev3
+
+# --- FIREBASE Y SECRETOS (¡MUY IMPORTANTE!) ---
+# Ignorar estos archivos evita que te roben la cuenta de Firebase
+google-services.json
+GoogleService-Info.plist
+firebase_options.dart
+
+# --- VISUAL STUDIO CODE ---
+.vscode/

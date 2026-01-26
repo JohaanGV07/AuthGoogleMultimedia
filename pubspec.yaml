@@ -1,0 +1,26 @@
+name: google_auth
+description: "A new Flutter project."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.10.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Core de Firebase
+  firebase_core: ^3.6.0
+  # Autenticación de Firebase
+  firebase_auth: ^5.3.1
+  # Plugin para el flujo de Google
+  google_sign_in: ^6.2.1
+  cloud_firestore: ^5.6.12
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
