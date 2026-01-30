@@ -1,7 +1,7 @@
 #!/bin/sh
 # This is a generated file; do not edit or check into version control.
-export "FLUTTER_ROOT=C:\Users\johgamvid.EDU.000\Desktop\AuthGoogle\flutter"
-export "FLUTTER_APPLICATION_PATH=C:\Users\johgamvid.EDU.000\Desktop\AuthGoogle\google_auth"
+export "FLUTTER_ROOT=C:\src\flutter"
+export "FLUTTER_APPLICATION_PATH=C:\Users\johan\Desktop\GoogleAuthLogin\AuthGoogleMultimedia"
 export "COCOAPODS_PARALLEL_CODE_SIGN=true"
 export "FLUTTER_TARGET=lib\main.dart"
 export "FLUTTER_BUILD_DIR=build"

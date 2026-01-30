@@ -4,9 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../services/auth_service.dart';
-// Asegúrate de que la ruta a tu servicio Imgbb sea correcta
-import '../services/imgbb_service.dart'; 
-// import '../core/services/imgbb_service.dart'; // Usa esta si lo guardaste en core
+import '../services/imgbb_service.dart'; // Asegúrate de que esta ruta es correcta
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -18,6 +16,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final User? currentUser = AuthService().currentUser;
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _aboutController = TextEditingController(); // Control de Estado/Info
   final ImgbbService _imgbbService = ImgbbService();
 
   bool _isUploading = false;
@@ -26,13 +25,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    if (currentUser != null) {
-      _nameController.text = currentUser!.displayName ?? "";
-      _displayImage = currentUser!.photoURL;
+    _loadUserProfile();
+  }
+
+  // Cargar datos existentes desde Firestore
+  Future<void> _loadUserProfile() async {
+    if (currentUser == null) return;
+
+    final doc = await FirebaseFirestore.instance.collection('users').doc(currentUser!.uid).get();
+    if (doc.exists) {
+      final data = doc.data() as Map<String, dynamic>;
+      setState(() {
+        _nameController.text = data['displayName'] ?? currentUser!.displayName ?? "";
+        _aboutController.text = data['about'] ?? "¡Hola! Estoy usando la App."; // Valor por defecto
+        _displayImage = data['photoURL'] ?? currentUser!.photoURL;
+      });
     }
   }
 
-  // Función para seleccionar y subir nueva foto
   Future<void> _pickAndUploadImage() async {
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery);
@@ -42,167 +52,199 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       try {
         final Uint8List imageBytes = await image.readAsBytes();
-        
-        // 1. Subir a Imgbb
         String? newPhotoUrl = await _imgbbService.uploadImage(imageBytes);
 
         if (newPhotoUrl != null) {
           setState(() {
             _displayImage = newPhotoUrl;
           });
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Imagen subida. No olvides guardar cambios.")),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Error al subir imagen a Imgbb")),
-          );
+          // Guardamos automáticamente al subir la foto
+          await _saveToFirestore(photoOnly: true); 
+          if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Foto de perfil actualizada")));
         }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
+        if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e")));
       } finally {
-        setState(() => _isUploading = false);
+        if(mounted) setState(() => _isUploading = false);
       }
     }
   }
 
-  // Guardar cambios en Firebase (Auth y Firestore)
+  // Función unificada para guardar
   Future<void> _saveProfile() async {
+    await _saveToFirestore();
+    if(mounted) Navigator.pop(context);
+  }
+
+  Future<void> _saveToFirestore({bool photoOnly = false}) async {
     if (currentUser == null) return;
-    
-    setState(() => _isUploading = true);
+    if (!photoOnly) setState(() => _isUploading = true);
 
     try {
-      String newName = _nameController.text.trim();
-      if (newName.isEmpty) newName = "Usuario";
+      Map<String, dynamic> dataToUpdate = {};
 
-      // 1. Actualizar perfil de Firebase Auth (para la sesión actual)
-      await currentUser!.updateDisplayName(newName);
-      if (_displayImage != null) {
-        await currentUser!.updatePhotoURL(_displayImage);
+      if (!photoOnly) {
+        String newName = _nameController.text.trim();
+        String newAbout = _aboutController.text.trim();
+        if (newName.isEmpty) newName = "Usuario";
+        
+        await currentUser!.updateDisplayName(newName);
+        dataToUpdate['displayName'] = newName;
+        dataToUpdate['about'] = newAbout;
+        dataToUpdate['email'] = currentUser!.email; // Aseguramos el email
       }
 
-      // 2. Actualizar documento en Firestore (para que otros usuarios lo vean)
-      Map<String, dynamic> dataToUpdate = {
-        'displayName': newName,
-      };
       if (_displayImage != null) {
+        await currentUser!.updatePhotoURL(_displayImage);
         dataToUpdate['photoURL'] = _displayImage;
       }
 
       await FirebaseFirestore.instance
           .collection('users')
           .doc(currentUser!.uid)
-          .update(dataToUpdate);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("¡Perfil actualizado con éxito!")),
-        );
-        Navigator.pop(context); // Volver atrás
-      }
+          .set(dataToUpdate, SetOptions(merge: true));
 
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error al guardar perfil: $e")),
-      );
+      print("Error guardando perfil: $e");
     } finally {
-      if (mounted) setState(() => _isUploading = false);
+      if (!photoOnly && mounted) setState(() => _isUploading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[100],
       appBar: AppBar(
-        title: const Text("Editar Perfil"),
+        title: const Text("Perfil"),
         backgroundColor: const Color(0xFF075E54),
         foregroundColor: Colors.white,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
         child: Column(
           children: [
             const SizedBox(height: 20),
-            
-            // --- AVATAR CON BOTÓN DE CAMBIO ---
+            // --- SECCIÓN FOTO ---
             Center(
               child: Stack(
                 children: [
                   CircleAvatar(
-                    radius: 70,
+                    radius: 80,
                     backgroundColor: Colors.grey.shade300,
-                    backgroundImage: _displayImage != null 
-                        ? NetworkImage(_displayImage!) 
-                        : null,
-                    child: _displayImage == null 
-                        ? const Icon(Icons.person, size: 70, color: Colors.white) 
-                        : null,
+                    backgroundImage: _displayImage != null ? NetworkImage(_displayImage!) : null,
+                    child: _displayImage == null ? const Icon(Icons.person, size: 80, color: Colors.white) : null,
                   ),
                   Positioned(
-                    bottom: 0,
-                    right: 0,
+                    bottom: 5,
+                    right: 5,
                     child: CircleAvatar(
                       backgroundColor: const Color(0xFF25D366),
-                      radius: 22,
+                      radius: 24,
                       child: IconButton(
-                        icon: const Icon(Icons.camera_alt, color: Colors.white),
-                        onPressed: _pickAndUploadImage,
-                        tooltip: "Cambiar foto",
+                        icon: _isUploading 
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                          : const Icon(Icons.camera_alt, color: Colors.white),
+                        onPressed: _isUploading ? null : _pickAndUploadImage,
                       ),
                     ),
                   ),
-                  if (_isUploading)
-                    const Positioned.fill(
-                      child: CircularProgressIndicator(),
+                ],
+              ),
+            ),
+            const SizedBox(height: 30),
+
+            // --- SECCIÓN NOMBRE ---
+            _buildSectionHeader(Icons.person, "Nombre"),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: Colors.white,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _nameController,
+                      decoration: const InputDecoration(
+                        hintText: "Tu nombre",
+                        border: InputBorder.none,
+                      ),
+                      style: const TextStyle(fontSize: 16),
                     ),
+                  ),
+                  const Icon(Icons.edit, color: Colors.grey, size: 20),
+                ],
+              ),
+            ),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text("Este no es tu nombre de usuario ni un PIN. Este nombre será visible para tus contactos.", 
+                style: TextStyle(color: Colors.grey, fontSize: 12)),
+            ),
+
+            // --- SECCIÓN INFO (ESTADO) ---
+            _buildSectionHeader(Icons.info_outline, "Info."),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: Colors.white,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _aboutController,
+                      decoration: const InputDecoration(
+                        hintText: "Disponible",
+                        border: InputBorder.none,
+                      ),
+                      style: const TextStyle(fontSize: 16),
+                    ),
+                  ),
+                  const Icon(Icons.edit, color: Colors.grey, size: 20),
                 ],
               ),
             ),
 
-            const SizedBox(height: 40),
-
-            // --- CAMPO DE NOMBRE ---
-            TextField(
-              controller: _nameController,
-              decoration: const InputDecoration(
-                labelText: "Nombre de usuario",
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.person),
+            // --- SECCIÓN EMAIL ---
+            _buildSectionHeader(Icons.email, "Correo"),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              color: Colors.white,
+              width: double.infinity,
+              child: Text(
+                currentUser?.email ?? "",
+                style: const TextStyle(fontSize: 16, color: Colors.grey),
               ),
-            ),
-
-            const SizedBox(height: 10),
-            
-            // Mostrar Email (Solo lectura)
-            ListTile(
-              leading: const Icon(Icons.email, color: Colors.grey),
-              title: Text(currentUser?.email ?? ""),
-              subtitle: const Text("Este correo no se puede cambiar"),
-              contentPadding: EdgeInsets.zero,
             ),
 
             const SizedBox(height: 30),
-
-            // --- BOTÓN GUARDAR ---
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
+            
+            // Botón Guardar Flotante (estilo)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 40),
+              child: ElevatedButton(
                 onPressed: _isUploading ? null : _saveProfile,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF075E54),
+                  backgroundColor: const Color(0xFF25D366),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  minimumSize: const Size(double.infinity, 50),
                 ),
-                icon: const Icon(Icons.save),
-                label: Text(
-                  _isUploading ? "Guardando..." : "Guardar Cambios",
-                  style: const TextStyle(fontSize: 18),
-                ),
+                child: const Text("GUARDAR", style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ),
+            const SizedBox(height: 30),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(IconData icon, String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, top: 16, bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF075E54), size: 20),
+          const SizedBox(width: 10),
+          Text(title, style: TextStyle(color: Colors.grey[700], fontWeight: FontWeight.bold)),
+        ],
       ),
     );
   }

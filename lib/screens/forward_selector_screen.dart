@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:google_auth/services/auth_service.dart';
+import '../services/auth_service.dart';
 
 class ForwardSelectorScreen extends StatelessWidget {
   const ForwardSelectorScreen({super.key});
@@ -33,7 +33,7 @@ class ForwardSelectorScreen extends StatelessWidget {
                 ),
                 title: Text(userData['displayName'] ?? "Usuario"),
                 onTap: () {
-                  // Devolvemos los datos del usuario seleccionado
+                  // Devolvemos el usuario seleccionado
                   Navigator.pop(context, userData);
                 },
               );
